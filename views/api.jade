@@ -82,7 +82,9 @@ ul
                                     thead
                                         tr
                                             th Parameter
-                                            th Value
+                                            // these spaces nudge the Type col so it doesnt overlap with the Value col in IE
+                                            th Value &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+
                                             th Type
                                             th Description
                                     tbody
@@ -147,4 +149,14 @@ ul
                                         a(href='#', class='add-headers') Add Header
                                     // Create header fields and button to add/remove headers.
                             - if (!method['read-only'])
+                                - var defaultOutputType = method.DefaultOutputType || 'json'
+                                - var outputTypes = method.OutputTypes || ['json']
+                                | Output type:
+                                select(name='_outputtype', placeholder='required')
+                                    - each type in outputTypes
+                                        - if (type == defaultOutputType)
+                                            option(value=type, selected=true) #{type}
+                                        - else
+                                            option(value=type) #{type}
+                                | <br><br>
                                 input(type='submit', id=method.MethodName, value='Try it!')

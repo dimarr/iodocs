@@ -34,7 +34,9 @@ var express     = require('express'),
     http        = require('http'),
     redis       = require('redis'),
     RedisStore  = require('connect-redis')(express),
-    hashlib     = require('hashlib');
+    hashlib     = require('hashlib'),
+    eyes        = require('eyes'),
+    HttpProxy   = require('http-proxy').HttpProxy;
 
 // Configuration
 try {
@@ -71,8 +73,9 @@ db.on("error", function(err) {
 //
 // Load API Configs
 //
+var apisConfigFile = config.apiConfig || 'public/data/apiconfig.json';
 var apisConfig;
-fs.readFile('public/data/apiconfig.json', 'utf-8', function(err, data) {
+fs.readFile(apisConfigFile, 'utf-8', function(err, data) {
     if (err) throw err;
     apisConfig = JSON.parse(data);
     if (config.debug) {
@@ -303,14 +306,18 @@ function processRequest(req, res, next) {
         baseHostPort = (baseHostInfo.length > 1) ? baseHostInfo[1] : "";
 
     var paramString = query.stringify(params),
-        privateReqURL = apiConfig.protocol + '://' + apiConfig.baseURL + apiConfig.privatePath + methodURL + ((paramString.length > 0) ? '?' + paramString : ""),
+        //privateReqURL = apiConfig.protocol + '://' + apiConfig.baseURL + apiConfig.privatePath + methodURL + ((paramString.length > 0) ? '?' + paramString : ""),
+        privateReqURL = '/' + apiName + '/api' + apiConfig.privatePath + methodURL + ((paramString.length > 0) ? '?' + paramString: ""),
         options = {
             headers: {},
-            protocol: apiConfig.protocol,
-            host: baseHostUrl,
-            port: baseHostPort,
+            //protocol: apiConfig.protocol,
+            //host: baseHostUrl,
+            //port: baseHostPort,
             method: httpMethod,
-            path: apiConfig.publicPath + methodURL + ((paramString.length > 0) ? '?' + paramString : "")
+            //path: apiConfig.publicPath + methodURL + ((paramString.length > 0) ? '?' + paramString : "")
+            path: privateReqURL,
+            port: config.port,
+            host: config.address
         };
 
     if (apiConfig.oauth) {
@@ -458,10 +465,10 @@ function processRequest(req, res, next) {
     // Unsecured API Call helper
     function unsecuredCall() {
         console.log('Unsecured Call');
-
+        
         // Add API Key to params, if any.
         if (apiKey != '' && apiKey != 'undefined' && apiKey != undefined) {
-            options.path += '&' + apiConfig.keyParam + '=' + apiKey;
+            options.path += (!paramString.length ? '?' : '&') + apiConfig.keyParam + '=' + apiKey;
         }
 
         // Perform signature routine, if any.
@@ -541,9 +548,9 @@ function processRequest(req, res, next) {
 
                 // Set Headers and Call
                 req.resultHeaders = response.headers;
-                req.call = url.parse(options.host + options.path);
+                req.call = url.parse(options.host + (options.port == 80 ? '' : ':' + options.port) + options.path);
                 req.call = url.format(req.call);
-
+                
                 // Response body
                 req.result = body;
 
@@ -592,6 +599,36 @@ app.dynamicHelpers({
 //
 // Routes
 //
+
+// API proxy
+app.all('/:api([^/]+)/api/:uri(*)', function(req, res) {
+    var api_conf = apisConfig[req.params.api];
+    var split = api_conf.baseURL.split(':'),
+        host = split[0],
+        port = (split.length == 2) ? port[1] : 80;
+    var options = {
+        'target' : {
+            'host' : host,
+            'port' : port
+        }
+    };
+
+    // rewrite the URL
+    // /my-api-name/api/my-method-name.xml -> baseURL + /my-method-name.xml
+    req.url = '/' + req.url.split('/api/')[1];
+
+    var proxy = new HttpProxy(options);
+   
+    /* 
+    proxy.on('proxyError', function(err, req2, res2) {
+        res.writeHead(500, { 'Content-Type': 'text/plain' });
+        res.end(err.toString());
+    });
+    */
+
+    proxy.proxyRequest(req, res);
+});
+
 app.get('/', function(req, res) {
     res.render('listAPIs', {
         title: config.title

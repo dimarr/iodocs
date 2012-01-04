@@ -207,6 +207,10 @@
             resultContainer.append($(document.createElement('h4')).text('Call'));
             resultContainer.append($(document.createElement('pre')).addClass('call'));
 
+            // Status
+            resultContainer.append($(document.createElement('h4')).text('Response Status'));
+            resultContainer.append($(document.createElement('pre')).addClass('status'));
+
             // Header
             resultContainer.append($(document.createElement('h4')).text('Response Headers'));
             resultContainer.append($(document.createElement('pre')).addClass('headers prettyprint'));
@@ -249,7 +253,14 @@
         })
         // Complete, runs on error and success
         .complete(function(result, text) {
-            var response = JSON.parse(result.responseText);
+            var response;
+            try {
+                response = JSON.parse(result.responseText);
+            } catch (e) {
+                response = result.responseText;
+            }
+
+            $('pre.status', resultContainer).text(result.status + ' - ' + result.statusText);
 
             if (response.call) {
                 $('pre.call', resultContainer)
@@ -268,8 +279,14 @@
             var response;
 
             if (err.responseText !== '') {
-                var result = JSON.parse(err.responseText),
-                    headers = formatJSON(result.headers);
+                var result;
+                var headers = formatJSON(err.headers);
+                
+                try {
+                    result = JSON.parse(err.responseText);
+                } catch (e) {
+                    result = err.responseText;
+                }
 
                 if (result.headers && result.headers['content-type']) {
                     // Format the result.response and assign it to response
@@ -281,6 +298,8 @@
             } else {
                 response = 'Error';
             }
+
+            $('pre.status', resultContainer).text(err.status + ' - ' + err.statusText);
 
             $('pre.response', resultContainer)
                 .toggleClass('error', true)

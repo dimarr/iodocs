@@ -1,3 +1,9 @@
+The goal of this I/O doc fork is to provide:
+1) a facility to create and manage API keys
+2) a central proxy to enforce API keys
+3) ability to monitor and manage performance (rate limiting) and access
+4) a friendly UI to do all of the above 
+
 I/O Docs - Open Source in Node.js
 =================================
 Copyright 2011 Mashery, Inc.

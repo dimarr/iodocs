@@ -790,16 +790,37 @@ li {
   }
 }
 
-div.key-form {
-    width: 300px;
+/****************** dmitri styles below ********************/
+.ui-dialog .ui-dialog-title,
+.ui-dialog .ui-dialog-content {
+    font-size: 8pt;
 }
 
-div.key-form .field {
+.form .field {
     margin: 0px 0px 5px 0px;
 }
 
-div.key-form .field input,
-div.key-form .field textarea,
-div.key-form .field select {
-    width: 100%;
+.form .field input,
+.form .field textarea,
+.form .field .selectBox {
+    width: 300px;
+}
+
+.form label {
+  font-weight: bold;
+  display: block;
+}
+
+.form {
+  background-color: #f9f9f9;
+  border: 1px solid #eee;
+  -moz-border-radius: 5px;
+  -webkit-border-radius: 5px;
+  -o-border-radius: 5px;
+  -ms-border-radius: 5px;
+  -khtml-border-radius: 5px;
+  border-radius: 5px;
+  overflow: hidden;
+  *zoom: 1;
+  padding: 15px;
 }

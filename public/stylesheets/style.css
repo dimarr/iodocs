@@ -789,3 +789,17 @@ li {
     page-break-after: avoid;
   }
 }
+
+div.key-form {
+    width: 300px;
+}
+
+div.key-form .field {
+    margin: 0px 0px 5px 0px;
+}
+
+div.key-form .field input,
+div.key-form .field textarea,
+div.key-form .field select {
+    width: 100%;
+}

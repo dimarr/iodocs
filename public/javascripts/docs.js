@@ -233,8 +233,6 @@
                 .addClass('response prettyprint'));
         }
 
-        console.log(params);
-
         $.post('/processReq', params, function(result, text) {
             // If we get passed a signin property, open a window to allow the user to signin/link their account
             if (result.signin) {
@@ -307,4 +305,34 @@
         })
     })
 
+    $('#key-form').submit(function(event) {
+        event.preventDefault();
+        $.post('/keys', $(this).serializeArray(), function(result, text) {
+            msg({
+                title: 'Success',
+                contents: 'Key created: ' + result.key
+            });
+        })
+        .error(function(err, text) {
+            msg({
+                title: 'Error',
+                contents: 'Error creating key: ' + err.status + ' - ' + err.responseText
+            });
+        });
+    });
+
 })();
+
+
+function msg(o) {
+    var $dialog = $('<div></div>').html(o.contents)
+        .dialog({ 
+            autoOpen: true, 
+            title: o.title,
+            buttons: {
+                "Ok" : function() {
+                    $(this).dialog("close");    
+                }
+            }
+        });
+}

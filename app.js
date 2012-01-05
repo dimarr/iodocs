@@ -36,7 +36,9 @@ var express     = require('express'),
     RedisStore  = require('connect-redis')(express),
     hashlib     = require('hashlib'),
     eyes        = require('eyes'),
-    HttpProxy   = require('http-proxy').HttpProxy;
+    HttpProxy   = require('http-proxy').HttpProxy
+    rbytes      = require('rbytes'),
+    async       = require('./vendor/async');
 
 // Configuration
 try {
@@ -602,37 +604,163 @@ app.dynamicHelpers({
 
 // API proxy
 app.all('/:api([^/]+)/api/:uri(*)', function(req, res) {
+    var api_key = req.body.api_key != null ? req.body.api_key : req.query.api_key;
     var api_conf = apisConfig[req.params.api];
+    var api = req.params.api;
     var split = api_conf.baseURL.split(':'),
         host = split[0],
         port = (split.length == 2) ? port[1] : 80;
-    var options = {
-        'target' : {
-            'host' : host,
-            'port' : port
-        }
-    };
 
-    // rewrite the URL
-    // /my-api-name/api/my-method-name.xml -> baseURL + /my-method-name.xml
-    req.url = '/' + req.url.split('/api/')[1];
 
-    var proxy = new HttpProxy(options);
-   
-    /* 
-    proxy.on('proxyError', function(err, req2, res2) {
-        res.writeHead(500, { 'Content-Type': 'text/plain' });
-        res.end(err.toString());
-    });
-    */
+    function validate_api_key(callback) {
+        if (api_key == null) return callback('Error: API key required');
 
-    proxy.proxyRequest(req, res);
+        db.get('api_key:' + api_key, function(err, json) {
+            if (json == null)
+                return callback('Error: invalid API key: ' + api_key);
+            
+            var props = JSON.parse(json);
+            if (props.api != api) 
+                return callback('Error: valid key but doesnt have access to this application: ' + api);
+
+            console.log('key (' + api_key + ') making request to API (' + api + ')');
+            callback(null);
+        });
+    }
+
+    function make_proxy_req(callback) {
+        var options = {
+            'target' : {
+                'host' : host,
+                'port' : port
+            }
+        };
+
+        // rewrite the URL
+        // [ /my-api-name/api/my-method-name.xml ] --> [ baseURL + /my-method-name.xml ]
+        req.url = '/' + req.url.split('/api/')[1];
+
+        var proxy = new HttpProxy(options);
+        proxy.proxyRequest(req, res);
+    }
+
+    function callback(err, results) {
+        if (err != null) return res.send(err, 500);
+        res.send(results);
+    }
+
+    async.series([
+        validate_api_key,
+        make_proxy_req
+    ], callback);
 });
 
 app.get('/', function(req, res) {
     res.render('listAPIs', {
         title: config.title
     });
+});
+
+app.get('/clean-db', function(req, res) {
+    console.log('Cleaning db');
+
+    // fetch api keys
+    db.smembers('api_keys', function(err, replies) {
+        // iterate api keys
+        replies.forEach(function(reply) {
+            console.log('deleting: ' + reply);
+            // delete api key
+            db.del('api_keys', reply, function(err, result) {
+                console.log('delete result: ' + (result == 1 ? 'good' : 'bad'));
+            });
+        });
+    });
+
+
+    // delete root
+    console.log('deleting root "api_keys"');
+    db.del('api_keys', function(err, result) {
+        console.log('delete result: ' + (result == 1 ? 'good' : 'bad'));
+    });
+
+    res.send('OK');
+});
+
+app.get('/dump-db', function(req, res) {
+    function find_api_keys(callback) {
+        db.smembers('api_keys', function(err, api_keys) {
+            callback(err, api_keys);
+        });
+    }
+
+    function get_api_properties(api_keys, callback) {
+        var keys = {};
+        if (api_keys.length == 0) 
+            callback(null, keys);
+        api_keys.forEach(function(api_key, index) {
+            db.get(api_key, function(err, json) {
+                api_key = api_key.split(':')[1];
+                keys[api_key] = JSON.parse(json);
+
+                if (api_keys.length - 1 == index) 
+                    callback(null, keys);
+            }); 
+        });
+    }
+
+    function callback(err, results) {
+        if (err != null) return res.send(err, 500);
+        res.send(results);
+    }
+
+    async.waterfall([
+        find_api_keys,
+        get_api_properties
+    ], callback);
+});
+
+
+app.get('/createKey', function(req, res) {
+    res.render('createKey', {
+        title: config.title    
+    });
+});
+
+app.post('/keys', function(req, res) {
+    var reqQuery = req.body,
+        rbuff = rbytes.randomBytes(16),
+        key = rbuff.toHex();
+
+    function validate_key(callback) {
+        db.get('api_key:' + key, function(err, result) {
+            if (err) return callback(err);
+            if (result != null) return callback('Duplicate key: ' + key);
+
+            callback(null, result);
+        });
+    }
+
+    function store_key(keys, callback) {
+        db.sadd('api_keys', 'api_key:' + key, function(err, result) {
+            db.set('api_key:' + key, JSON.stringify(reqQuery), function(err, result) {
+                if (err) return callback(err);
+                callback(null);
+            });
+        });
+    }
+
+    function callback(err, results) {
+        if (err != null) return res.send(err, 500);
+
+        res.send({
+            'key': key
+        });
+    }
+
+    async.waterfall([
+        validate_key,
+        store_key
+    ], callback); 
 });
 
 // Process the API request
@@ -665,7 +793,6 @@ app.post('/upload', function(req, res) {
 app.get('/:api([^\.]+)', function(req, res) {
     res.render('api');
 });
-
 // Only listen on $ node app.js
 
 if (!module.parent) {

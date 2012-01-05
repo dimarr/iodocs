@@ -305,7 +305,9 @@
         })
     })
 
-    $('#key-form').submit(function(event) {
+    // 
+    // Handle submit for create key form
+    $('#create-key-form').submit(function(event) {
         event.preventDefault();
         $.post('/keys', $(this).serializeArray(), function(result, text) {
             msg({
@@ -321,8 +323,15 @@
         });
     });
 
+
 })();
 
+$(document).ready(function() {
+    //
+    // initialize selectBox components
+    // http://labs.abeautifulsite.net/jquery-selectBox/
+    $("select").selectBox(); 
+});
 
 function msg(o) {
     var $dialog = $('<div></div>').html(o.contents)

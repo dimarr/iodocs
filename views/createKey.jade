@@ -2,16 +2,20 @@ h1=title
 
 h2 Create Key
 
-form(name='key-form', id='key-form')
-    div.key-form
-        div.field Choose API
-            select(name='api')
-               - for (var api in apiInfo)
-                   option(value=api) #{apiInfo[api].name}
-        div.field Application name
+form(name='create-key-form', id='create-key-form')
+    div.form
+        div.field 
+            label Choose API(s)
+            select(name='apis', multiple='multiple')
+                - for (var api in apiInfo)
+                    option(value=api) #{apiInfo[api].name}
+        div.field 
+            label Application name
             input(name='appName')
-        div.field Email
+        div.field 
+            label Email
             input(name='email')
-        div.field App description
+        div.field 
+            label App description
             textarea(name='description',rows=3)
         input(type='submit', value='Submit')

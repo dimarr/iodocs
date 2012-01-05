@@ -38,6 +38,7 @@ var express     = require('express'),
     eyes        = require('eyes'),
     HttpProxy   = require('http-proxy').HttpProxy
     rbytes      = require('rbytes'),
+    _           = require('./vendor/underscore'),
     async       = require('./vendor/async');
 
 // Configuration
@@ -615,15 +616,13 @@ app.all('/:api([^/]+)/api/:uri(*)', function(req, res) {
     function validate_api_key(callback) {
         if (api_key == null) return callback('Error: API key required');
 
-        db.get('api_key:' + api_key, function(err, json) {
+        db.get('api_reg:' + api + ':' + api_key, function(err, json) {
             if (json == null)
                 return callback('Error: invalid API key: ' + api_key);
             
             var props = JSON.parse(json);
-            if (props.api != api) 
-                return callback('Error: valid key but doesnt have access to this application: ' + api);
-
             console.log('key (' + api_key + ') making request to API (' + api + ')');
+
             callback(null);
         });
     }
@@ -636,8 +635,9 @@ app.all('/:api([^/]+)/api/:uri(*)', function(req, res) {
             }
         };
 
+        //
         // rewrite the URL
-        // [ /my-api-name/api/my-method-name.xml ] --> [ baseURL + /my-method-name.xml ]
+        //  [ /my-api-name/api/my-method-name.xml ] --> [ baseURL + /my-method-name.xml ]
         req.url = '/' + req.url.split('/api/')[1];
 
         var proxy = new HttpProxy(options);
@@ -676,46 +676,90 @@ app.get('/clean-db', function(req, res) {
         });
     });
 
-
-    // delete root
+    // delete root hash "api_keys"
     console.log('deleting root "api_keys"');
     db.del('api_keys', function(err, result) {
         console.log('delete result: ' + (result == 1 ? 'good' : 'bad'));
     });
 
+
+    // fetch api reg entries
+    db.smembers('api_registry', function(err, replies) {
+        // iterate api reg entries
+        replies.forEach(function(reply) {
+            console.log('deleting: ' + reply);
+            // delete api reg entry
+            db.del('api_registry', reply, function(err, result) {
+                console.log('delete result: ' + (result == 1 ? 'good' : 'bad'));
+            });
+        });
+    });
+
+    // delete root hash "api_registry"
+    console.log('deleting root "api_registry"');
+    db.del('api_registry', function(err, result) {
+        console.log('delete result: ' + (result == 1 ? 'good' : 'bad'));
+    });
+
+
     res.send('OK');
 });
 
 app.get('/dump-db', function(req, res) {
+    var results = {};
     function find_api_keys(callback) {
+        results['keys'] = {};
         db.smembers('api_keys', function(err, api_keys) {
             callback(err, api_keys);
         });
     }
 
     function get_api_properties(api_keys, callback) {
-        var keys = {};
         if (api_keys.length == 0) 
-            callback(null, keys);
+            return callback(null);
+        var numKeys = api_keys.length;
         api_keys.forEach(function(api_key, index) {
             db.get(api_key, function(err, json) {
                 api_key = api_key.split(':')[1];
-                keys[api_key] = JSON.parse(json);
+                results.keys[api_key] = JSON.parse(json);
 
-                if (api_keys.length - 1 == index) 
-                    callback(null, keys);
+                if (--numKeys == 0) 
+                    callback(null);
             }); 
         });
     }
 
-    function callback(err, results) {
+    function find_registered(callback) {
+        results['registry'] = {};
+        db.smembers('api_registry', function(err, registry) {
+            callback(err, registry);
+        });
+    }
+    
+    function get_reg_properties(registry, callback) {
+        if (registry.length == 0)
+            return callback(null);
+        var numReg = registry.length;
+        registry.forEach(function(api_reg, index) {
+            db.get(api_reg, function(err, json) {
+                api_reg = api_reg.split(':').slice(1).join(':');
+                results.registry[api_reg] = JSON.parse(json);
+                if (--numReg == 0) 
+                    callback(null); 
+            });
+        });
+    }
+
+    function callback(err) {
         if (err != null) return res.send(err, 500);
         res.send(results);
     }
 
     async.waterfall([
         find_api_keys,
-        get_api_properties
+        get_api_properties,
+        find_registered,
+        get_reg_properties
     ], callback);
 });
 
@@ -726,25 +770,53 @@ app.get('/createKey', function(req, res) {
     });
 });
 
+/*
+ * @param apis {array}  List of APIs for which key will have access to
+ * @param appName       Name of consumer application which will use the key
+ * @param description   Description of the consumer app
+ * @param email         Contact email
+ */
 app.post('/keys', function(req, res) {
     var reqQuery = req.body,
         rbuff = rbytes.randomBytes(16),
-        key = rbuff.toHex();
+        key = rbuff.toHex(),
+        apis = reqQuery.apis;       
 
-    function validate_key(callback) {
-        db.get('api_key:' + key, function(err, result) {
-            if (err) return callback(err);
-            if (result != null) return callback('Duplicate key: ' + key);
+    if (apis == null || apis.length == 0) 
+        return res.send('No APIs provided', 500);
 
-            callback(null, result);
+    if (!_.isArray(apis))
+        apis = [apis];
+
+    // store API key
+    function store_key(callback) {
+        var store_key = 'api_key:' + key;
+        var store_obj = {
+            'description': reqQuery.description,
+            'appName': reqQuery.appName,
+            'email': reqQuery.email
+        };
+        db.sadd('api_keys', store_key, function(err, result) {
+           if (err) return callback(err); 
+            db.set(store_key, JSON.stringify(store_obj), function(err, result) {
+                if (err) return callback(err);
+                callback(null);
+            });
         });
     }
 
-    function store_key(keys, callback) {
-        db.sadd('api_keys', 'api_key:' + key, function(err, result) {
-            db.set('api_key:' + key, JSON.stringify(reqQuery), function(err, result) {
-                if (err) return callback(err);
-                callback(null);
+    // register key with API
+    function register_key(callback) {
+        var numApis = apis.length;
+        apis.forEach(function(api) {
+            var store_key = 'api_reg:' + api + ':' + key;  // api_reg:foo-api:98024dh2h9034723s23js49
+            db.sadd('api_registry', store_key, function(err, result) {
+                if (err) return callback(err); 
+                db.set(store_key, '{}', function(err, result) {
+                    if (err) return callback(err); 
+                    if (--numApis == 0) 
+                        callback(null);
+                });
             });
         });
     }
@@ -758,8 +830,8 @@ app.post('/keys', function(req, res) {
     }
 
     async.waterfall([
-        validate_key,
-        store_key
+        store_key,
+        register_key
     ], callback); 
 });
 

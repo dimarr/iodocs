@@ -824,3 +824,10 @@ li {
   *zoom: 1;
   padding: 15px;
 }
+
+
+span.api-count {
+    font-size: 8pt;
+    color: #808080;
+    font-weight: normal;
+}

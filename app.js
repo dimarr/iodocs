@@ -655,12 +655,6 @@ app.all('/:api([^/]+)/api/:uri(*)', function(req, res) {
     ], callback);
 });
 
-app.get('/', function(req, res) {
-    res.render('listAPIs', {
-        title: config.title
-    });
-});
-
 app.get('/clean-db', function(req, res) {
     console.log('Cleaning db');
 
@@ -764,6 +758,32 @@ app.get('/dump-db', function(req, res) {
 });
 
 
+app.get('/apis', function(req, res) {
+    var apis = {};
+    // make a deep copy of apisConfig
+    _.each(apisConfig, function(props, api) {
+        apis[api] = {};
+        _.extend(apis[api], props);
+    });
+    db.smembers('api_registry', function(err, registry) {
+        registry.forEach(function(entry) {
+            var split = entry.split(':'),
+                api = split[1],
+                key = split[2];
+
+            if (!apis[api].keys) apis[api]['keys'] = [];
+            apis[api].keys.push(key);
+        });
+
+        res.send(apis);
+    });
+});
+
+app.get('/manageKeys', function(req, res) {
+    res.render('manageKeys', {
+        title: config.title
+    });
+});
 app.get('/createKey', function(req, res) {
     res.render('createKey', {
         title: config.title    
@@ -794,7 +814,8 @@ app.post('/keys', function(req, res) {
         var store_obj = {
             'description': reqQuery.description,
             'appName': reqQuery.appName,
-            'email': reqQuery.email
+            'email': reqQuery.email,
+            'createTime': new Date()
         };
         db.sadd('api_keys', store_key, function(err, result) {
            if (err) return callback(err); 
@@ -834,6 +855,14 @@ app.post('/keys', function(req, res) {
         register_key
     ], callback); 
 });
+
+
+app.get('/', function(req, res) {
+    res.render('listAPIs', {
+        title: config.title
+    });
+});
+
 
 // Process the API request
 app.post('/processReq', oauth, processRequest, function(req, res) {

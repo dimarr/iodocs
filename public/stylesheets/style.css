@@ -831,3 +831,11 @@ span.api-count {
     color: #808080;
     font-weight: normal;
 }
+
+.api-key-table {
+    margin: 5px 0px 10px 0px
+}
+.api-key-table td {
+    border: 1px solid #c0c0c0;
+    padding: 2px;
+}

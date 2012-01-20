@@ -1,0 +1,25 @@
+h1=title
+
+h2=key
+
+form(name='edit-key-form', id='edit-key-form')
+    div.form
+        input(name='apiKey', type='hidden', value=key)
+        div.field 
+            label Choose API(s)
+            select(name='apis', multiple='multiple')
+                - for (var api in apiInfo)
+                    - if (apiHash[api])
+                        option(value=api,SELECTED='true') #{apiInfo[api].name}
+                    - else
+                        option(value=api) #{apiInfo[api].name}
+        div.field 
+            label Application name
+            input(name='appName',value=keyProps.appName)
+        div.field 
+            label Email
+            input(name='email',value=keyProps.email)
+        div.field 
+            label App description
+            textarea(name='description',rows=3)=keyProps.description
+        input(type='submit', value='Submit')

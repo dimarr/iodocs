@@ -27,22 +27,27 @@ $(document).ready(function() {
                 if (!props.keys || !props.keys.length) {
                     $(this).after('No keys found<br>');
                 } else {
-                    $.get('/keys', { 'keys' : keys_csv }, function(keys) {
-                        var html = '<table class=api-key-table><tr>'
-                            + '<th width=150></th>'
+                    $.get('/apis/' + api + '/keys', function(keys) {
+                        var html = '<table class=api-key-table>'
+                            + '<tr>'
+                            + '<th width=180></th>'
                             + '<th width=250>Key</th>'
-                            + '<th width=150>Application</th>'
+                            + '<th width=200>Application</th>'
                             + '<th width=200>Description</th>'
-                            + '<th width=100>Calls / min <br><font size=1>(5m, 15m, 60m)</font></th>'
-                            + '<th></th></tr>';
+                            + '<th width=180>Calls / min<br><font size=1>(5m, 15m, 60m)</font></th>'
+                            + '<th></th>'
+                            + '</tr>';
 
                         $.each(keys, function(key, obj) {
                             html += '<tr>'
-                                + '<td align=center><a href=#>unlink</a> | <a href=#>throttle</a> | <a href=#>edit</a></td>'
+                                + '<td align=center>'
+                                + '    <a href=/keys/' + key + '/edit>properties</a> |'
+                                + '    <a href=#>limits</a>'
+                                + '</td>'
                                 + '<td align=center>' + key + '</td>'
                                 + '<td>' + obj.appName + '</td>'
                                 + '<td>' + obj.description + '</td>'
-                                + '<td align=center>15, 7, 1</td>'
+                                + '<td align=center>' + obj.load + '</td>'
                                 + '</tr>';
                         });
 

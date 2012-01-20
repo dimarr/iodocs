@@ -825,7 +825,6 @@ li {
   padding: 15px;
 }
 
-
 span.api-count {
     font-size: 8pt;
     color: #808080;
@@ -833,9 +832,12 @@ span.api-count {
 }
 
 .api-key-table {
-    margin: 5px 0px 10px 0px
+    margin: 0px 0px 10px 0px
 }
 .api-key-table td {
     border: 1px solid #c0c0c0;
     padding: 2px;
+}
+.api-key-table th {
+    vertical-align: middle;
 }

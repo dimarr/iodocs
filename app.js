@@ -628,6 +628,151 @@ app.dynamicHelpers({
     }
 })
 
+
+//
+// Route Middleware
+//
+
+function loadApisForKey(req, res, next) {
+    var key = req.params.key;
+
+    if (!key) return next("'key' is a required param");
+    
+    apiKeyStore.findApisForKey(key, function(err, apis) {
+        if (err) return next(err);
+        req.apis = apis;
+        next();
+    });
+}
+
+function loadKeysForApi(req, res, next) {
+    var api = req.params.api;
+
+    if (!api) return next("'api' is a required param");
+
+    apiKeyStore.findKeysForApi(api, function(err, keys) {
+        if (err) return next(err);
+        req.keys = keys;
+        next();
+    });
+}
+
+//TODO:not used
+function loadCsvKeys(req, res, next) {
+    if (!req.query.keys) return next("'keys' is a required param");
+
+    // hash to filter uniq keys and store key data
+    var keyHash = {};
+    // get a unique and trimmed list of keys
+    var keys = _.filter(req.query.keys.split(/\s*,\s*/), function(key) { if (!keyHash[key]) { keyHash[key]=1; return true; } return false; });
+
+    req.numKeys = keys.length;
+ 
+}
+
+function loadKeyData(req, res, next) {
+    var keys = req.keys;
+
+    if (!keys) return next("'keys' is a required param");
+
+    var keyHash = {};
+   
+    // retrieve data for each key
+    _.each(keys, function(key, index) {
+        apiKeyStore.findKey(key, function(err, data) {
+            if (err) return next(err);
+            keyHash[key] = data;
+            if (index == keys.length - 1) {
+                req.keyHash = keyHash;
+                next();
+            }
+        });
+
+    });
+}
+
+function loadStats(req, res, next) {
+    var keyHash = req.keyHash;
+    var keys = req.keys;
+    var api = req.params.api;
+
+    if (!keys) return next("'keys' is a required param");
+    if (!keyHash) return next("'keyHash' is a required param");
+    if (!api) return next("'api' is a required param");
+
+    var numKeys = keys.length;
+    if (!numKeys) return next();
+
+    var now = (new Date()).getTime();
+
+    function div(n, d) {
+        return Math.round( 100 * n / d) / 100;
+    }
+
+    // iterate keys
+    _.each(keyHash, function(keyData, key) {
+        // find stats for {key, api}
+        apiKeyStore.findRequestLogs(key, api, function(err, logs) {
+            if (err) return next(err);
+
+            var stats = {
+                '5m'  : { 'sec': 300, 'num': 0 },
+                '15m' : { 'sec': 900, 'num': 0 },
+                '60m' : { 'sec': 3600, 'num': 0 }
+            };
+
+            // calculate the load average from raw stats
+            for (var i = 0; i < logs.length; i++) {
+                var log = logs[i];
+                _.each(stats, function(stat, key) { if (log.time > now - stat.sec * 1000) stat.num++;  });
+            }
+
+            // populate existing key hash with stats
+            req.keyHash[key]['load'] = div(stats['5m'].num, 5) + ', ' + div(stats['15m'].num, 15) + ', ' + div(stats['60m'].num, 60);
+            if (--numKeys == 0) 
+                next();
+        });
+    });
+
+}
+
+function loadKey(req, res, next) {
+    if (req.params.key == '')
+        return next("'key' is a required param");
+
+    var key = apiKeyStore.findKey(req.params.key, function(err, data) {
+        if (err) return next(err);
+        req.key = data;
+        next();
+    });
+}
+
+function validateRequest(req, res, next) {
+    // handle API key in query string and body
+    var api_key = req.body.api_key != null ? req.body.api_key : req.query.api_key,
+        api = req.params.api;
+        
+
+    if (api_key == null) 
+        return next('Error: API key required');
+
+    if (!apiKeyStore.getApiLinks()[api + ':' + api_key])
+        return next('Error: invalid API key: ' + api_key);
+
+
+    req.api_key = api_key;
+    next();
+}
+
+function logRequest(req, res, next) {
+    apiKeyStore.logRequest({
+        'apiName': req.params.api, 
+        'apiKey': req.api_key,
+        'ip': req.connection.remoteAddress,
+        'time': (new Date()).getTime()
+    });
+    next();
+}
 //
 // Routes
 //
@@ -635,21 +780,15 @@ app.dynamicHelpers({
 /**
  * API proxy, key authenticator, rate limiter
  */
-app.all('/:api([^/]+)/api/:uri(*)', function(req, res) {
-    var api_key = req.body.api_key != null ? req.body.api_key : req.query.api_key;
-    var api_conf = apisConfig[req.params.api];
-    var api = req.params.api;
-    var split = api_conf.baseURL.split(':'),
+app.all('/:api([^/]+)/api/:uri(*)', validateRequest, logRequest, function(req, res) {
+    var api_key = req.api_key,
+        api_conf = apisConfig[req.params.api],
+        api = req.params.api,
+        split = api_conf.baseURL.split(':'),
         host = split[0],
         port = (split.length == 2) ? port[1] : 80;
 
-
-    if (api_key == null) 
-        return res.send('Error: API key required', 500);
-
-    if (!apiKeyStore.getRegistry()[api + ':' + api_key])
-        return res.send('Error: invalid API key: ' + api_key, 500);
-
+    
     var options = {
         'target' : {
             'host' : host,
@@ -667,18 +806,18 @@ app.all('/:api([^/]+)/api/:uri(*)', function(req, res) {
     proxy.on('start', function(req, res, target) {
         console.log('Start proxy request...');
     });
-    proxy.on('proxyError', function(err, req, res) {
-        console.log('!!!proxy error!!! ' + err);
-    });
     proxy.on('end', function(req, res) {
         console.log('End proxy request');
+    });
+    proxy.on('proxyError', function(err, req, res) {
+        console.log('!!!proxy error!!! ' + err);
     });
 
     proxy.proxyRequest(req, res);
 });
 
 /**
- * Wipes clean all of the API keys and registry
+ * Wipes clean all of the API keys and links
  */
 app.get('/clean-db', function(req, res) {
     console.log('Cleaning db');
@@ -690,12 +829,12 @@ app.get('/clean-db', function(req, res) {
  * Dumps db contents
  */
 app.get('/dump-db', function(req, res) {
-    function callback(err, apiKeys, registry) {
+    function callback(err, keys, links) {
         if (err != null) return res.send(err, 500);
 
         var json = {
-            'apiKeys': apiKeys,
-            'registry': registry
+            'apiKeys': keys,
+            'apiLinks': links
         };
 
         res.send(json);
@@ -704,9 +843,10 @@ app.get('/dump-db', function(req, res) {
     apiKeyStore.refreshCache(callback);
 });
 
+
 /**
  * Outputs APIs in a kv object
- * Each key is the APIs name, each value containing API data and registered keys
+ * key is the API name, value contains API data and list of linked keys
  */
 app.get('/apis', function(req, res) {
     var apis = {};
@@ -715,8 +855,8 @@ app.get('/apis', function(req, res) {
         apis[api] = {};
         _.extend(apis[api], props);
     });
-    db.smembers('api_registry', function(err, registry) {
-        registry.forEach(function(entry) {
+    db.smembers('api_links', function(err, links) {
+        links.forEach(function(entry) {
             var split = entry.split(':'),
                 api = split[1],
                 key = split[2];
@@ -729,28 +869,132 @@ app.get('/apis', function(req, res) {
     });
 });
 
+/**
+ * Get keys belonging to an API + API-key pertinent information such as load
+ */
+app.get('/apis/:api/keys', loadKeysForApi, loadKeyData, loadStats, function(req, res) {
+    res.send(req.keyHash);
+});
 
-app.get('/keys', function(req, res) {
-    // hash to filter uniq keys and store key data
-    var keyHash = {};
-    // get a unique and trimmed list of keys
-    var keys = _.filter(req.query.keys.split(/\s*,\s*/), function(key) { if (!keyHash[key]) { keyHash[key]=1; return true; } return false; });
-    
-    // retrieve data for each key
-    _.each(keys, function(key, index) {
-        apiKeyStore.findKey(key, function(err, data) {
-            keyHash[key] = data;
-            if (index == keys.length - 1) 
-                res.send(keyHash);
-        });
+
+/**
+ * Edit a key
+ */
+app.get('/keys/:key/edit', loadKey, loadApisForKey, function(req, res) {
+    // turn array elements into hash keys
+    var apiHash = _.chain(req.apis).reduce(function(hash, api) { hash[api] = 1; return hash; }, {}).value();
+
+    res.render('editKey', {
+        title: 'Edit Key',
+        key: req.params.key,
+        keyProps: req.key,
+        apiHash: apiHash
     });
 });
+
+/**
+ * Get all keys
+ */
+app.get('/keys', function(req, res) {
+    res.send(apiKeyStore.getApiKeys());
+});
+
+/**
+ * Get a single key + APIs its linked to
+ */
+app.get('/keys/:key', loadKey, function(req, res) {
+    res.send({
+        'key': req.key,
+        'apis': req.apis
+    });
+});
+
+/**
+ * Update key properties
+ */
+app.put('/keys/:key', loadKey, loadApisForKey, function(req, res, next) {
+    var key = req.params.key,
+        wantApis = req.body.apis || [],
+        haveKeyProps = req.key,
+        haveApis = req.apis,
+        linkApis = [], 
+        unlinkApis = [];
+
+    if (!_.isArray(wantApis))
+        wantApis = [wantApis];
+
+    // find APIs to link
+    for (var i = 0; i < wantApis.length; i++) {
+        var api = wantApis[i];
+        var is_found = false;
+        for (var j = 0; j < haveApis.length; j++) {
+            if (api == haveApis[j]) {
+                is_found = true;
+                break;
+            }
+        }
+        if (!is_found)
+            linkApis.push(api);
+    }
+
+    // find APIs to unlink
+    for (var i = 0; i < haveApis.length; i++) {
+        var api = haveApis[i];
+        var is_found = false;
+        for (var j = 0; j < wantApis.length; j++) {
+            if (api == wantApis[j]) {
+                is_found = true;
+                break;
+            }
+        }
+        if (!is_found)
+            unlinkApis.push(api);
+    }
+
+    var wantKeyProps = {
+        'description': req.body.description,
+        'appName': req.body.appName,
+        'email': req.body.email,
+        'createTime': haveKeyProps.createTime // preserve create time
+    };
+
+    function save_props(callback) {
+        apiKeyStore.saveKey(key, wantKeyProps, function(err) {
+            if (err) return callback(err); 
+            callback();
+        });
+    }
+    function unlink_apis(callback) {
+        unlinkApis.forEach(function(api, index) {
+            apiKeyStore.unlinkApi(key, api);
+        });
+        callback();
+    }
+    function link_apis(callback) {
+        linkApis.forEach(function(api, index) {
+            apiKeyStore.linkApi(key, api);
+        });
+        callback();
+    }
+    function callback(err) {
+        if (err) return next(err);
+        res.send(wantKeyProps);
+    }
+
+    async.series([
+        save_props,
+        unlink_apis,
+        link_apis
+    ], callback);
+});
+
 
 app.get('/manageKeys', function(req, res) {
     res.render('manageKeys', {
         title: config.title
     });
 });
+
 app.get('/createKey', function(req, res) {
     res.render('createKey', {
         title: config.title    
@@ -768,14 +1012,17 @@ app.get('/createKey', function(req, res) {
 app.post('/keys', function(req, res) {
     var reqQuery = req.body,
         rbuff = rbytes.randomBytes(16),
-        key = rbuff.toHex(),
-        apis = reqQuery.apis;       
+        key = rbuff.toHex();
+
+    var apis = req.body.apis;
 
     if (apis == null || apis.length == 0) 
-        return res.send('No APIs provided', 500);
+        return next('No APIs provided', 500);
 
     if (!_.isArray(apis))
         apis = [apis];
+
+
 
     function callback(err, results) {
         if (err != null) return res.send(err, 500);

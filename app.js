@@ -691,7 +691,7 @@ function loadKeyData(req, res, next) {
     });
 }
 
-function loadStats(req, res, next) {
+function loadStatsForKeys(req, res, next) {
     var keyHash = req.keyHash;
     var keys = req.keys;
     var api = req.params.api;
@@ -700,7 +700,22 @@ function loadStats(req, res, next) {
     if (!keyHash) return next("'keyHash' is a required param");
     if (!api) return next("'api' is a required param");
 
-    var numKeys = keys.length;
+    _loadStats(api, keys.length, keyHash, false, next);
+}
+
+function loadStatsForApiLink(req, res, next) {
+    var linkHash = req.linkHash;
+    var link = req.params.link;
+
+    if (!linkHash) return next("'linkHash' is a required param");
+    if (!link) return next("'link' is a required param");
+
+    var split = link.split(':');
+   _loadStats(split[0], 1, linkHash, true, next);
+}
+
+function _loadStats(api, numKeys, results, includeRawLogs, next) {
+    if (numKeys == null) return next("'numKeys' is a required param");
     if (!numKeys) return next();
 
     var now = (new Date()).getTime();
@@ -710,25 +725,41 @@ function loadStats(req, res, next) {
     }
 
     // iterate keys
-    _.each(keyHash, function(keyData, key) {
+    _.each(results, function(value, key) {
+
+        // if there's a colon then the key is a link and we need to extract the API key
+        // otherwise, the key is an API key
+        var split = key.split(':'); 
+        var api_key = split.length == 1 ? key : split[1];
+
         // find stats for {key, api}
-        apiKeyStore.findRequestLogs(key, api, function(err, logs) {
+        apiKeyStore.findRequestLogs(api_key, api, function(err, logs) {
             if (err) return next(err);
 
+            // define cutoffs
             var stats = {
                 '5m'  : { 'sec': 300, 'num': 0 },
                 '15m' : { 'sec': 900, 'num': 0 },
                 '60m' : { 'sec': 3600, 'num': 0 }
             };
 
+            if (includeRawLogs)
+                value['requestLogs'] = [];
+
             // calculate the load average from raw stats
             for (var i = 0; i < logs.length; i++) {
                 var log = logs[i];
+
+                // tally up the stats by cutoff ie 5m, 15m...
                 _.each(stats, function(stat, key) { if (log.time > now - stat.sec * 1000) stat.num++;  });
+
+                if (includeRawLogs)
+                    value['requestLogs'].push(log);
             }
 
-            // populate existing key hash with stats
-            req.keyHash[key]['load'] = div(stats['5m'].num, 5) + ', ' + div(stats['15m'].num, 15) + ', ' + div(stats['60m'].num, 60);
+            // create the pretty load string
+            value['load'] = div(stats['5m'].num, 5) + ', ' + div(stats['15m'].num, 15) + ', ' + div(stats['60m'].num, 60);
+
             if (--numKeys == 0) 
                 next();
         });
@@ -764,12 +795,28 @@ function validateRequest(req, res, next) {
     next();
 }
 
+function validateApiLink(req, res, next) {
+    var link = req.params.link;
+
+    if (!apiKeyStore.getApiLinks()[link]) 
+        return next('Invalid link: ' + link);
+
+    req.linkHash = {};
+    apiKeyStore.findLink(link, function(err, link_obj) {
+        if (err) return next(err);
+        req.linkHash[link] = link_obj;
+        next();
+    });
+}
+
 function logRequest(req, res, next) {
     apiKeyStore.logRequest({
         'apiName': req.params.api, 
         'apiKey': req.api_key,
         'ip': req.connection.remoteAddress,
-        'time': (new Date()).getTime()
+        'time': (new Date()).getTime(),
+        'method': req.method,
+        'pathname': require('url').parse(req.url).pathname
     });
     next();
 }
@@ -829,12 +876,13 @@ app.get('/clean-db', function(req, res) {
  * Dumps db contents
  */
 app.get('/dump-db', function(req, res) {
-    function callback(err, keys, links) {
+    function callback(err, keys, links, logs) {
         if (err != null) return res.send(err, 500);
 
         var json = {
             'apiKeys': keys,
-            'apiLinks': links
+            'apiLinks': links,
+            'requestLogs': logs
         };
 
         res.send(json);
@@ -872,7 +920,7 @@ app.get('/apis', function(req, res) {
 /**
  * Get keys belonging to an API + API-key pertinent information such as load
  */
-app.get('/apis/:api/keys', loadKeysForApi, loadKeyData, loadStats, function(req, res) {
+app.get('/apis/:api/keys', loadKeysForApi, loadKeyData, loadStatsForKeys, function(req, res) {
     res.send(req.keyHash);
 });
 
@@ -885,7 +933,7 @@ app.get('/keys/:key/edit', loadKey, loadApisForKey, function(req, res) {
     var apiHash = _.chain(req.apis).reduce(function(hash, api) { hash[api] = 1; return hash; }, {}).value();
 
     res.render('editKey', {
-        title: 'Edit Key',
+        title: config.title,
         key: req.params.key,
         keyProps: req.key,
         apiHash: apiHash
@@ -988,6 +1036,16 @@ app.put('/keys/:key', loadKey, loadApisForKey, function(req, res, next) {
     ], callback);
 });
 
+app.get('/links/:link', validateApiLink, loadStatsForApiLink, function(req, res) {
+    res.send(req.linkHash);
+});
+
+app.get('/viewLink', function(req, res) {
+    res.render('viewLink', {
+        title: config.title,
+        link: req.query.link
+    });
+});
 
 app.get('/manageKeys', function(req, res) {
     res.render('manageKeys', {

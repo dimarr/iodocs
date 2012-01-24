@@ -1,0 +1,18 @@
+h1=title
+
+h2 API-Key Limits (#{link})
+
+input(type='hidden',id='api-link',value=link)
+
+div.form
+    h3 24hr Load 
+    div#load-chart
+
+    br
+
+    h3 Request Logs
+    div#request-logs
+
+script(src='/javascripts/raphael/raphael-min.js')
+script(src='/javascripts/raphael.popup.js')
+script(src='/javascripts/viewlink.js')

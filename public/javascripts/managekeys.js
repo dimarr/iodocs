@@ -42,7 +42,7 @@ $(document).ready(function() {
                             html += '<tr>'
                                 + '<td align=center>'
                                 + '    <a href=/keys/' + key + '/edit>properties</a> |'
-                                + '    <a href=#>limits</a>'
+                                + '    <a href=/viewLink?link=' + api + ':' + key + '>limits</a>'
                                 + '</td>'
                                 + '<td align=center>' + key + '</td>'
                                 + '<td>' + obj.appName + '</td>'

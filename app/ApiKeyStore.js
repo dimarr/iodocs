@@ -79,6 +79,7 @@ ApiKeyStore.prototype.findKeysForApi = function(api, callback) {
 ApiKeyStore.prototype.findLink = function(link, callback) {
     callback = callback || function(err) {if (err) console.log("Error: " + err);};
     db.get('api_link:' + link, function(err, json) {
+        if (err) return callback(err);
         callback(err, JSON.parse(json));
     });
 }
@@ -87,6 +88,7 @@ ApiKeyStore.prototype.findLink = function(link, callback) {
 ApiKeyStore.prototype.findKey = function(api_key, callback) {
     callback = callback || function(err) {if (err) console.log("Error: " + err);};
     db.get('api_key:' + api_key, function(err, json) {
+        if (err) return callback(err);
         callback(err, JSON.parse(json));
     });
 }
@@ -112,6 +114,15 @@ ApiKeyStore.prototype.linkApi = function(api_key, api, callback) {
 
             callback();
         });
+    });
+}
+
+ApiKeyStore.prototype.saveLink = function(link, options, callback) {
+    callback = callback || function(err) {if (err) console.log("Error: " + err);};
+    db.set('api_link:' + link, JSON.stringify(options), function(err, replies) {
+        if (err) return callback(err);
+        apiLinkHash[link] = options;
+        callback();
     });
 }
 
@@ -272,7 +283,12 @@ ApiKeyStore.prototype.refreshCache = function(callback) {
         links.forEach(function(api_link, index) {
             db.get(api_link, function(err, json) {
                 api_link = api_link.split(':').slice(1).join(':');
-                apiLinkHash[api_link] = JSON.parse(json);
+                try {
+                    apiLinkHash[api_link] = JSON.parse(json);
+                } catch (e) {
+                    apiLinkHash[api_link] = {};
+                    console.log('Error parsing json for link: ' + api_link + ', json = ' + json);
+                }
                 if (--numLinks == 0) 
                     callback(); 
             });

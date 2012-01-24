@@ -1,10 +1,63 @@
 
 $(document).ready(function() {
+    // Rate limit form submit handler
+    $('#rate-limit-form').submit(function(event) {
+        event.preventDefault();
+        var link = $('#api-link').val();
+        $.ajax({
+            'url': '/links/' + link, 
+            'type': 'PUT',
+            'data': $(this).serializeArray(), 
+            'success': function(result, text) {
+                msg({
+                    title: 'Success',
+                    contents: 'Link updated'
+                })
+            }
+        })
+        .error(function(err, text) {
+            msg({
+                title: 'Error',
+                contents: 'Error creating key: ' + err.status + ' - ' + err.responseText
+            });
+        });
+    });
+
+
     var link = $('#api-link').val();
     var requestLogElem = $('#request-logs');
+    // fetch request logs
     $.get('/links/' + link, function(linkHash) {
         var logs = linkHash[link].requestLogs;
         var load = linkHash[link].load
+
+        var interval = 30;
+        var time_cutoffs = [];
+        var labels = [];
+        var values = [];
+
+        time_cutoffs[0] = (new Date()).getTime() - interval*60000; // calculate the first cutoff
+
+        for (var i = 0; i < 48; i++) {
+            var dt = new Date(time_cutoffs[i]),
+                m = dt.getMinutes(),
+                h = dt.getHours();
+
+            // round time to nearest interval
+            h = m > (60 - interval/2) ? ++h : h;
+            m = (parseInt((m + (interval/2)) / interval) * interval) % 60;
+
+            h = h < 10 ? '0' + h : h;
+            m = m < 10 ? '0' + m : m;
+
+            values[i] = 0;
+            labels[i] = h + ':' + m;
+
+            if (i < 47)
+                time_cutoffs[i + 1] = time_cutoffs[i] - interval*60000;  // calculate the next cutoff
+        }
+
+        // generate request logs html
         var html = '<table class=api-key-table>'
             + '<tr>'
             + '<th width=50>#</th>'
@@ -13,32 +66,6 @@ $(document).ready(function() {
             + '<th width=60>Method</th>'
             + '<th width=490>Path Name</th>'
             + '</tr>';
-
-        
-        var interval = 30;
-        var time_cutoffs = [];
-        var labels = [];
-        var values = [];
-
-        time_cutoffs[0] = (new Date()).getTime() - interval*60000;
-
-        for (var i = 0; i < 48; i++) {
-            var dt = new Date(time_cutoffs[i]);
-            var m = dt.getMinutes();
-            var h = dt.getHours();
-
-            // round time to nearest interval
-            h = m > (60 - interval/2) ? ++h : h;
-            m = (parseInt((m + (interval/2)) / interval) * interval) % 60;
-
-            h = h < 10 ? '0' + h : h;
-            m = m < 10 ? '0' + m : m;
-            values[i] = 0;
-            labels[i] = h + ':' + m;
-
-            if (i < 47)
-                time_cutoffs[i + 1] = time_cutoffs[i] - interval*60000;
-        }
 
         $.each(logs, function(i, log) {
             var dt = new Date(log.time);
@@ -62,9 +89,11 @@ $(document).ready(function() {
 
         html += '</table>';
 
-        drawGraph(labels, values);
-
+        // populate the request logs table
         $(requestLogElem).html(html);
+
+        // render the line graph
+        drawGraph(labels, values);
     });
 });
 
@@ -106,7 +135,7 @@ function drawGraph(labels, data) {
     
     // Draw
     var width = 900,
-        height = 280,
+        height = 250,
         leftgutter = 30,
         bottomgutter = 30,
         topgutter = 20,
@@ -114,12 +143,12 @@ function drawGraph(labels, data) {
         color = "hsl(" + [colorhue, .5, .5] + ")",
         r = Raphael("load-chart", width, height),
         txt = {font: '10px Helvetica, Arial', fill: "#808080"},
-        txt1 = {font: '10px Helvetica, Arial', fill: "#808080"},
-        txt2 = {font: '10px Helvetica, Arial', fill: "#000"},
+        txt1 = {font: '12px Helvetica, Arial', fill: "#808080"},
+        txt2 = {font: '12px Helvetica, Arial', fill: "#000"},
         X = (width - leftgutter) / labels.length,
         max = Math.max.apply(Math, data),
         Y = (height - bottomgutter - topgutter) / max;
-    r.drawGrid(leftgutter + X * .5 + .5, topgutter + .5, width - leftgutter - X, height - topgutter - bottomgutter, 10, 10, "#000");
+    r.drawGrid(leftgutter + X * .5 + .5, topgutter + .5, width - leftgutter - X, height - topgutter - bottomgutter, 10, 10, "#c0c0c0");
     var path = r.path().attr({stroke: color, "stroke-width": 4, "stroke-linejoin": "round"}),
         bgp = r.path().attr({stroke: "none", opacity: .3, fill: color}),
         label = r.set(),
@@ -127,7 +156,7 @@ function drawGraph(labels, data) {
         is_label_visible = false,
         leave_timer,
         blanket = r.set();
-    label.push(r.text(60, 12, "asdfasdfasdf").attr(txt));
+    label.push(r.text(60, 12, "asdfasdfasdf").attr(txt)).attr({font: '12px Helvetica, Arial'});
     label.push(r.text(60, 27, "asdfasdfsdf").attr(txt1).attr({fill: color}));
     label.hide();
     var frame = r.popup(100, 100, label, "right").attr({fill: "#000", stroke: "#666", "stroke-width": 2, "fill-opacity": .7}).hide();

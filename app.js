@@ -57,6 +57,9 @@ try {
 var defaultDB = '0';
 var db;
 
+// Rate limiting
+var tokenBucket = {};
+
 if (process.env.REDISTOGO_URL) {
     var rtg   = require("url").parse(process.env.REDISTOGO_URL);
     db = require("redis").createClient(rtg.port, rtg.hostname);
@@ -783,23 +786,57 @@ function validateRequest(req, res, next) {
     var api_key = req.body.api_key != null ? req.body.api_key : req.query.api_key,
         api = req.params.api;
         
-
     if (api_key == null) 
         return next('Error: API key required');
 
-    if (!apiKeyStore.getApiLinks()[api + ':' + api_key])
+    var link = api + ':' + api_key;
+    var link_obj = apiKeyStore.getApiLinks()[link];
+
+    if (!link)
         return next('Error: invalid API key: ' + api_key);
 
+    if (link_obj.rateLimit && link_obj.rateLimitUnit) {
+        var now = (new Date()).getTime(); 
+
+        if (!tokenBucket[link]) {
+            tokenBucket[link] = {
+                'credits': link_obj.rateLimit,
+                'depositTime': now
+            }
+        }
+        
+        var bucket = tokenBucket[link];
+        var unit_time = 1000;
+        switch(link_obj.rateLimitUnit) {
+            case 'hour': 
+                unit_time*=60*60; break;
+            case 'minute': 
+                unit_time*=60; break;
+            case 'second':
+                break;
+            default: 
+                console.log('Error, units not supported: ' + bucket.rateLimitUnit);
+        }
+
+        if (now - bucket.depositTime > unit_time) {
+            bucket.credits = link_obj.rateLimit;
+            bucket.depositTime = now;
+        } else if (bucket.credits == 0) {
+            return next('Rate limit exceeded ' + link_obj.rateLimit + ' call(s) per ' + link_obj.rateLimitUnit);
+        }
+
+        bucket.credits--;
+    }
 
     req.api_key = api_key;
     next();
 }
 
 function validateApiLink(req, res, next) {
-    var link = req.params.link;
+    var link = req.params.link || req.query.link;
 
     if (!apiKeyStore.getApiLinks()[link]) 
-        return next('Invalid link: ' + link);
+        return next('Error: invalid link: ' + link);
 
     req.linkHash = {};
     apiKeyStore.findLink(link, function(err, link_obj) {
@@ -1036,14 +1073,35 @@ app.put('/keys/:key', loadKey, loadApisForKey, function(req, res, next) {
     ], callback);
 });
 
+app.put('/links/:link', validateApiLink, function(req, res) {
+    var limit = req.body.rateLimit;
+    var link_obj = {};
+
+    if (limit != null) {
+        link_obj = {
+            'rateLimit' : req.body.rateLimit,
+            'rateLimitUnit' : req.body.rateLimitUnit
+        };
+    }
+
+    apiKeyStore.saveLink(req.params.link, link_obj,function(err) {
+        if (err) return res.send(err);
+        res.send(req.linkHash);
+    });
+});
+
 app.get('/links/:link', validateApiLink, loadStatsForApiLink, function(req, res) {
     res.send(req.linkHash);
 });
 
-app.get('/viewLink', function(req, res) {
+app.get('/viewLink', validateApiLink, function(req, res) {
+    var linkHash = req.linkHash;
+    var link = req.query.link;
     res.render('viewLink', {
         title: config.title,
-        link: req.query.link
+        link: link,
+        rateLimitUnit: linkHash[link].rateLimitUnit,
+        rateLimit: linkHash[link].rateLimit
     });
 });
 

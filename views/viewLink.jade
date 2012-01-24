@@ -4,11 +4,26 @@ h2 API-Key Limits (#{link})
 
 input(type='hidden',id='api-link',value=link)
 
+- var units = [{label:'Hour',value: 'hour'}, {label: 'Minute', value: 'minute'}, {label: 'Second', value: 'second'}];
 div.form
-    h3 24hr Load 
-    div#load-chart
+    h3 Rate Limiting
+    form(name='rate-limit-form',id='rate-limit-form')
+        | Allow up to 
+        input(size=5,name='rateLimit',value=rateLimit)
+        |&nbsp;calls per 
+        select(name='rateLimitUnit')
+            each unit in units
+                - if (rateLimitUnit == unit.value)
+                    option(value=unit.value, SELECTED='true') #{unit.label}
+                - else
+                    option(value=unit.value) #{unit.label}
+        |&nbsp;
+        input(type='submit', value='Submit')
 
     br
+    
+    h3 Load
+    div#load-chart
 
     h3 Request Logs
     div#request-logs

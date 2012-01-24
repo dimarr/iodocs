@@ -76,6 +76,14 @@ ApiKeyStore.prototype.findKeysForApi = function(api, callback) {
     .exec(); 
 }
 
+ApiKeyStore.prototype.findLink = function(link, callback) {
+    callback = callback || function(err) {if (err) console.log("Error: " + err);};
+    db.get('api_link:' + link, function(err, json) {
+        callback(err, JSON.parse(json));
+    });
+}
+
+
 ApiKeyStore.prototype.findKey = function(api_key, callback) {
     callback = callback || function(err) {if (err) console.log("Error: " + err);};
     db.get('api_key:' + api_key, function(err, json) {
@@ -117,18 +125,16 @@ ApiKeyStore.prototype.cleanDb = function() {
     db.smembers('api_keys', function(err, replies) {
         // iterate api keys
         replies.forEach(function(reply) {
-            console.log('deleting: ' + reply);
             // delete api key
             db.del('api_keys', reply, function(err, result) {
-                console.log('delete result: ' + (result == 1 ? 'good' : 'bad'));
+                console.log('delete api_key: ' + (result == 1 ? 'good' : 'bad'));
             });
         });
     });
 
     // delete root hash "api_keys"
-    console.log('deleting root "api_keys"');
     db.del('api_keys', function(err, result) {
-        console.log('delete result: ' + (result == 1 ? 'good' : 'bad'));
+        console.log('delete api_keys: ' + (result == 1 ? 'good' : 'bad'));
     });
 
 
@@ -136,23 +142,35 @@ ApiKeyStore.prototype.cleanDb = function() {
     db.smembers('api_links', function(err, replies) {
         // iterate api reg entries
         replies.forEach(function(reply) {
-            console.log('deleting: ' + reply);
             // delete api reg entry
             var split = reply.split(':'),
                 api = split[1],
                 api_key = split[2];
 
             self.unlinkApi(api_key, api, function(err) {
-                console.log('delete result: ' + (!err ? 'good' : 'bad'));
+                console.log('delete api_link: ' + (!err ? 'good' : 'bad'));
             });
 
         });
     });
 
     // delete root hash "api_links"
-    console.log('deleting root "api_links"');
     db.del('api_links', function(err, result) {
-        console.log('delete result: ' + (result == 1 ? 'good' : 'bad'));
+        console.log('delete api_links: ' + (result == 1 ? 'good' : 'bad'));
+    });
+
+    // fetch request log buckets
+    db.smembers('request_log_buckets', function(err, replies) {
+        replies.forEach(function(bucket) {
+            db.del('request_log_buckets', bucket, function(err, result) {
+                console.log('delete request_logs: ' + (result == 1 ? 'good' : 'bad'));
+            });
+        });
+    });
+
+    // delete root hash "request_log_buckets"
+    db.del('request_log_buckets', function(err, result) {
+        console.log('delete request_log_buckets: ' + (result == 1 ? 'good' : 'bad'));
     });
 }
 
@@ -247,17 +265,40 @@ ApiKeyStore.prototype.refreshCache = function(callback) {
         });
     }
     
-    function get_reg_properties(links, callback) {
+    function get_link_properties(links, callback) {
         var numLinks = links.length;
         if (numLinks == 0)
-            return callback(null, apiKeyHash, apiLinkHash);
+            return callback();
         links.forEach(function(api_link, index) {
             db.get(api_link, function(err, json) {
                 api_link = api_link.split(':').slice(1).join(':');
                 apiLinkHash[api_link] = JSON.parse(json);
                 if (--numLinks == 0) 
-                    // pass apiKeyHash and apiLinkHash to caller
-                    callback(null, apiKeyHash, apiLinkHash); 
+                    callback(); 
+            });
+        });
+    }
+
+    // get request log keys for each {api, key} pair
+    function get_log_buckets(callback) {
+        db.smembers('request_log_buckets', function(err, buckets) {
+            callback(err, buckets);
+        });
+    }
+
+    // get num logs for each {api, key} pair
+    function get_log_counts(buckets, callback) {
+        var numBuckets = buckets.length;
+        var bucketHash = {};
+        if (numBuckets == 0)
+            callback(null, apiKeyHash, apiLinkHash, bucketHash); 
+        buckets.forEach(function(bucket, index) {
+            db.llen(bucket, function(err, len) {
+                bucketHash[bucket] = {
+                    'numLogs' : len
+                };
+                if (--numBuckets == 0) 
+                    callback(null, apiKeyHash, apiLinkHash, bucketHash); 
             });
         });
     }
@@ -266,20 +307,24 @@ ApiKeyStore.prototype.refreshCache = function(callback) {
         find_api_keys,
         get_api_properties,
         find_linked,
-        get_reg_properties
+        get_link_properties,
+        get_log_buckets,
+        get_log_counts
     ], callback);
 }
 
 ApiKeyStore.prototype.findRequestLogs = function(api_key, api, callback) {
     callback = callback || function(err) {if (err) console.log("Error: " + err);};
     var bucket_key = 'request_logs:' + api + ':' + api_key;    
-    var log_objs = [];
-    var keys = ['time', 'ip'];
-    db.lrange(bucket_key, 0, 9999, function(err, logs) {
-        for (var i = 0; i < logs.length; i++) {
+    var myLogs = [];
+    var keys = ['time', 'ip', 'method', 'pathname'];
+    db.lrange(bucket_key, 0, 9999, function(err, log_keys) {
+        if (err) return callback(err); 
+
+        for (var i = 0; i < log_keys.length; i++) {
             var j = 0;
-            log_objs.push(
-                _.chain(logs[i].split(':').slice(3, 5))
+            myLogs.push(
+                _.chain(log_keys[i].split(':').slice(3, 3 + keys.length))
                 .reduce(function(hash, val) { 
                     var key = keys[j];
                     if (key == 'time')
@@ -292,31 +337,31 @@ ApiKeyStore.prototype.findRequestLogs = function(api_key, api, callback) {
                 .value()
             );
         }
-        return callback(null, log_objs);
+
+        return callback(null, myLogs);
     });
 }
 
 ApiKeyStore.prototype.logRequest = function(options) {
     options = options || {};
+
     var apiName = options.apiName,
         apiKey = options.apiKey,
         time = options.time,
-        ip = options.ip;
+        ip = options.ip,
+        method = options.method,
+        pathname = options.pathname;
 
     var bucket_key = 'request_logs:' + apiName + ':' + apiKey;
-    var log_key = 'request_log:' + apiName + ':' + apiKey + ':' + time + ':' + ip;
-    var log_obj = {
-        'ip': ip
-    };
+    var log_key = 'request_log:' + apiName + ':' + apiKey + ':' + time + ':' + ip + ':' + method + ':' + pathname;
 
     db.multi()
-    .sadd('request_log_bucket', bucket_key, function(err, replies) {
+    .sadd('request_log_buckets', bucket_key, function(err, replies) {
         if (err) console.dir(err);
-        eyes.inspect(replies);
     })
     .lpush(bucket_key, log_key, function(err, replies) {
         if (err) console.dir(err);
-        eyes.inspect(replies);
+        console.log('logging ' + log_key + '... log count = ' + replies);
     })
     .exec();
 }

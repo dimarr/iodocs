@@ -841,3 +841,17 @@ span.api-count {
 .api-key-table th {
     vertical-align: middle;
 }
+
+#request-logs {
+    height: 400px;
+    overflow-y: scroll;
+    width: 905px;
+    padding: 10px 0px 0px 20px;
+    border: 1px solid #c0c0c0;
+    margin-top: 3px;
+}
+
+#load-chart {
+    width: 600px;
+    height: 280px;
+}

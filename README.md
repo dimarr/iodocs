@@ -8,9 +8,9 @@ The goal of this I/O Docs fork is to provide a simple API management and documen
 4. a UI to do all of the above 
 5. and.. all of the functionality of I/O Docs!!
 
-Performance is key. The API proxy uses asynchronous logging, rate limiting is done in memory using a simple and efficient [algorithm](http://en.wikipedia.org/wiki/Token_bucket), API key enforcement is done in memory, and proxying is done by the ["battle-hardened node.js http proxy."](https://github.com/nodejitsu/node-http-proxy) 
+Performance is key. The API proxy uses asynchronous logging, in-memory API key enforcement, rate limiting using a simple and efficient [algorithm](http://en.wikipedia.org/wiki/Token_bucket), and API request proxying by the ["battle-hardened node.js http proxy."](https://github.com/nodejitsu/node-http-proxy) 
 
-Implementation is no different than I/O Docs, simply follow the steps below.
+Implementation is no different than I/O Docs, simply follow the steps below (from the original I/O Docs README).
 
 
 I/O Docs - Open Source in Node.js

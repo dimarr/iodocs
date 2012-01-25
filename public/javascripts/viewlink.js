@@ -64,7 +64,7 @@ $(document).ready(function() {
             + '<th width=150>Time</th>'
             + '<th width=100>IP</th>'
             + '<th width=60>Method</th>'
-            + '<th width=490>Path Name</th>'
+            + '<th width=510>Path Name</th>'
             + '</tr>';
 
         $.each(logs, function(i, log) {

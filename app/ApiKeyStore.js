@@ -26,11 +26,21 @@ var ApiKeyStore = exports.ApiKeyStore = function (options) {
     }, 500);
 }
 
+/**
+ * Returns the API key hash. Each hash kv pair is an API-key and the corresponding API-key properties.
+ * @throws exception if cache is null
+ */
 ApiKeyStore.prototype.getApiKeys = function() {
+    if (apiKeyHash == null) throw "API Key cache is empty";
     return apiKeyHash;
 }
 
+/**
+ * Returns the API link hash. Each hash kv pair is an API link (string "api:api-key") and the corresponding API link properties.
+ * @throws exception if cache is null
+ */
 ApiKeyStore.prototype.getApiLinks = function() {
+    if (apiLinkHash == null) throw "API Key cache is empty";
     return apiLinkHash;
 }
 
@@ -128,6 +138,7 @@ ApiKeyStore.prototype.saveLink = function(link, options, callback) {
 
 /**
  * Asynchronously wipes clean all API keys and links
+ * Helpful for debugging and checking schema
  */
 ApiKeyStore.prototype.cleanDb = function() {
     var self = this;
@@ -198,8 +209,9 @@ ApiKeyStore.prototype.saveKey = function(key, keyData, callback) {
 }
 
 /**
- * 1) Stores the api key and data 
- * 2) Creates key <-> api links
+ * Does two things:
+ * - Stores the api key and data 
+ * - Creates key <-> api links
  * 
  * @param options {object} kv param containing apis, key, data
  * @param callback {function} callback with err param which is null if method is successful
@@ -240,7 +252,8 @@ ApiKeyStore.prototype.registerKey = function(options, callback) {
 
 /**
  * Refreshes the cached variables 
- * @param callback {function} A function containing params for apiKeyHash, apiLinkHash, err
+ * @param callback {function} A callback function containing params for apiKeyHash, apiLinkHash, bucketHash, err.
+ *                            bucketHash contains kv pairs of logs for each API link and the number of logs in the DB for that link
  */
 ApiKeyStore.prototype.refreshCache = function(callback) {
     callback = callback || function(err, apiKeys, links) {if (err) console.log("Error: " + err); };
@@ -358,9 +371,14 @@ ApiKeyStore.prototype.findRequestLogs = function(api_key, api, callback) {
     });
 }
 
+/**
+ * Log a single API request to the DB. 
+ * @param {object} Options containing the logged properties
+ */
 ApiKeyStore.prototype.logRequest = function(options) {
     options = options || {};
 
+    // logged values
     var apiName = options.apiName,
         apiKey = options.apiKey,
         time = options.time,
@@ -369,6 +387,7 @@ ApiKeyStore.prototype.logRequest = function(options) {
         pathname = options.pathname;
 
     var bucket_key = 'request_logs:' + apiName + ':' + apiKey;
+    // logged values concatenated into a string
     var log_key = 'request_log:' + apiName + ':' + apiKey + ':' + time + ':' + ip + ':' + method + ':' + pathname;
 
     db.multi()

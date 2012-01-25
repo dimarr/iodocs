@@ -10,7 +10,7 @@ $(document).ready(function() {
         $.each(apis, function(api, props) {
             var keys_csv = '';
             var count = 'N/A';
-            if (props.keys) {
+            if (props.keys && props.keys.length) {
                 keys_csv = props.keys.join(',');
                 count = props.keys.length + ' key';
                 if (props.keys.length > 1)

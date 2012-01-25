@@ -937,21 +937,21 @@ app.get('/apis', function(req, res) {
     var apis = {};
     // make a deep copy of apisConfig
     _.each(apisConfig, function(props, api) {
-        apis[api] = {};
+        apis[api] = {
+            'keys': []
+        };
         _.extend(apis[api], props);
     });
-    db.smembers('api_links', function(err, links) {
-        links.forEach(function(entry) {
-            var split = entry.split(':'),
-                api = split[1],
-                key = split[2];
 
-            if (!apis[api].keys) apis[api]['keys'] = [];
-            apis[api].keys.push(key);
-        });
+    var apiLinkHash = apiKeyStore.getApiLinks();
+    _.each(apiLinkHash, function(props, link) {
+        var split = link.split(':'),
+            api = split[0],
+            key = split[1];
 
-        res.send(apis);
+        apis[api].keys.push(key);
     });
+    res.send(apis);
 });
 
 /**

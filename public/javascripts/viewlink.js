@@ -27,7 +27,7 @@ $(document).ready(function() {
     var link = $('#api-link').val();
     var requestLogElem = $('#request-logs');
     // fetch request logs
-    $.get('/links/' + link, function(linkHash) {
+    $.get('/links/' + link + '?_cachebuster='+(new Date()).getTime(), function(linkHash) {
         var logs = linkHash[link].requestLogs;
         var load = linkHash[link].load
 
@@ -146,7 +146,7 @@ function drawGraph(labels, data) {
         txt1 = {font: '12px Helvetica, Arial', fill: "#808080"},
         txt2 = {font: '12px Helvetica, Arial', fill: "#000"},
         X = (width - leftgutter) / labels.length,
-        max = Math.max.apply(Math, data),
+        max = Math.max.apply(Math, data) || 1, // max has to be non-zero or else div/0 issues below
         Y = (height - bottomgutter - topgutter) / max;
     r.drawGrid(leftgutter + X * .5 + .5, topgutter + .5, width - leftgutter - X, height - topgutter - bottomgutter, 10, 10, "#c0c0c0");
     var path = r.path().attr({stroke: color, "stroke-width": 4, "stroke-linejoin": "round"}),

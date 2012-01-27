@@ -796,16 +796,7 @@ function validateRequest(req, res, next) {
         return next('Error: invalid API key: ' + api_key);
 
     if (link_obj.rateLimit && link_obj.rateLimitUnit) {
-        var now = (new Date()).getTime(); 
-
-        if (!tokenBucket[link]) {
-            tokenBucket[link] = {
-                'credits': link_obj.rateLimit,
-                'depositTime': now
-            }
-        }
         
-        var bucket = tokenBucket[link];
         var unit_time = 1000;
         switch(link_obj.rateLimitUnit) {
             case 'hour': 
@@ -818,11 +809,17 @@ function validateRequest(req, res, next) {
                 console.log('Error, units not supported: ' + bucket.rateLimitUnit);
         }
 
-        if (now - bucket.depositTime > unit_time) {
-            bucket.credits = link_obj.rateLimit;
-            bucket.depositTime = now;
+        var now = (new Date()).getTime(); 
+        var bucket = tokenBucket[link];
+        if (!bucket || now - bucket.depositTime > unit_time) {
+            bucket = tokenBucket[link] = {
+                'credits': link_obj.rateLimit,
+                'depositTime': now,
+                'lastDepositAmount': link_obj.rateLimit,
+                'rateLimitUnit': link_obj.rateLimitUnit
+            }
         } else if (bucket.credits == 0) {
-            return next('Rate limit exceeded ' + link_obj.rateLimit + ' call(s) per ' + link_obj.rateLimitUnit);
+            return next('Rate limit exceeded ' + bucket.lastDepositAmount + ' call(s) per ' + bucket.rateLimitUnit);
         }
 
         bucket.credits--;

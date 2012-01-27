@@ -1,7 +1,7 @@
 
 $(document).ready(function() {
     // retrieve APIs and associated keys
-    $.get('/apis', function(apis) {
+    $.get('/apis?_cachebuster='+(new Date()).getTime(), function(apis) {
         var apiListElem = $('#apis');
         if (!apis || apis.length == 0) 
             return apiListElem.append('No APIs found');
@@ -27,7 +27,7 @@ $(document).ready(function() {
                 if (!props.keys || !props.keys.length) {
                     $(this).after('No keys found<br>');
                 } else {
-                    $.get('/apis/' + api + '/keys', function(keys) {
+                    $.get('/apis/' + api + '/keys?_cachebuster='+(new Date()).getTime(), function(keys) {
                         var html = '<table class=api-key-table>'
                             + '<tr>'
                             + '<th width=180></th>'

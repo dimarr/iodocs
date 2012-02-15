@@ -1,6 +1,12 @@
-[submodule "jquery-dateFormat"]
-	path = jquery-dateFormat
-	url = https://github.com/phstc/jquery-dateFormat.git
 [submodule "public/javascripts/jquery-dateFormat"]
 	path = public/javascripts/jquery-dateFormat
 	url = https://github.com/phstc/jquery-dateFormat
+[submodule "public/javascripts/jquery-selectBox"]
+	path = public/javascripts/jquery-selectBox
+	url = https://github.com/claviska/jquery-selectBox
+[submodule "public/javascripts/jquery-ui"]
+	path = public/javascripts/jquery-ui
+	url = https://github.com/jquery/jquery-ui.git
+[submodule "public/javascripts/raphael"]
+	path = public/javascripts/raphael
+	url = https://github.com/DmitryBaranovskiy/raphael

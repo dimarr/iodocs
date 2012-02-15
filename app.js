@@ -1124,7 +1124,7 @@ app.get('/createKey', function(req, res) {
  */
 app.post('/keys', function(req, res) {
     var reqQuery = req.body,
-        rbuff = rbytes.randomBytes(16),
+        rbuff = rbytes.randomBytes(16), //TODO: switch to use crypto.randomBytes() 
         key = rbuff.toHex();
 
     var apis = req.body.apis;

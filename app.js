@@ -27,7 +27,6 @@
 var express     = require('express'),
     util        = require('util'),
     fs          = require('fs'),
-    sys         = require('sys'),
     OAuth       = require('oauth').OAuth,
     query       = require('querystring'),
     url         = require('url'),
@@ -46,7 +45,7 @@ try {
     var configJSON = fs.readFileSync(__dirname + "/config.json");
     var config = JSON.parse(configJSON.toString());
 } catch(e) {
-    sys.puts("File config.json not found or is invalid.  Try: `cp config.json.sample config.json`");
+    util.puts("File config.json not found or is invalid.  Try: `cp config.json.sample config.json`");
     process.exit(1);
 }
 

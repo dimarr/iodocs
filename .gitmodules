@@ -1,0 +1,3 @@
+[submodule "jquery-dateFormat"]
+	path = jquery-dateFormat
+	url = https://github.com/phstc/jquery-dateFormat.git

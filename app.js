@@ -34,7 +34,6 @@ var express     = require('express'),
     http        = require('http'),
     redis       = require('redis'),
     RedisStore  = require('connect-redis')(express),
-    hashlib     = require('hashlib'),
     eyes        = require('eyes'),
     crypto      = require('crypto'),
     HttpProxy   = require('http-proxy').HttpProxy
@@ -496,13 +495,13 @@ function processRequest(req, res, next) {
             if (apiConfig.signature.type == 'signed_md5') {
                 // Add signature parameter
                 var timeStamp = Math.round(new Date().getTime()/1000);
-                var sig = hashlib.md5('' + apiKey + apiSecret + timeStamp + '', { asString: true });
+                var sig = crypto.createHash('md5').update('' + apiKey + apiSecret + timeStamp + '').digest('base64');
                 options.path += '&' + apiConfig.signature.sigParam + '=' + sig;
             }
             else if (apiConfig.signature.type == 'signed_sha256') { // sha256(key+secret+epoch)
                 // Add signature parameter
                 var timeStamp = Math.round(new Date().getTime()/1000);
-                var sig = hashlib.sha256('' + apiKey + apiSecret + timeStamp + '', { asString: true });
+                var sig = crypto.createHash('sha256').update('' + apiKey + apiSecret + timeStamp + '').digest('base64');
                 options.path += '&' + apiConfig.signature.sigParam + '=' + sig;
             }
         }

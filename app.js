@@ -36,8 +36,8 @@ var express     = require('express'),
     RedisStore  = require('connect-redis')(express),
     hashlib     = require('hashlib'),
     eyes        = require('eyes'),
+    crypto      = require('crypto'),
     HttpProxy   = require('http-proxy').HttpProxy
-    rbytes      = require('rbytes'),
     _           = require('underscore'),
     async       = require('async')
     ApiKeyStore = require('./app/ApiKeyStore').ApiKeyStore;
@@ -1124,8 +1124,7 @@ app.get('/createKey', function(req, res) {
  */
 app.post('/keys', function(req, res) {
     var reqQuery = req.body,
-        rbuff = rbytes.randomBytes(16), //TODO: switch to use crypto.randomBytes() 
-        key = rbuff.toHex();
+        key = crypto.createHmac('sha1', 'a89w74987w34j9a9w87sa2oihwye8213').update(crypto.randomBytes(16)).digest('hex');
 
     var apis = req.body.apis;
 

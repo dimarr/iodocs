@@ -12,11 +12,11 @@ div.form
         input(size=5,name='rateLimit',value=rateLimit)
         |&nbsp;calls per 
         select(name='rateLimitUnit')
-            each unit in units
-                - if (rateLimitUnit == unit.value)
-                    option(value=unit.value, SELECTED='true') #{unit.label}
+            - for (var i=0; i<units.length; i++)
+                - if (rateLimitUnit == units[i].value)
+                    option(value=units[i].value, SELECTED='true') #{units[i].label}
                 - else
-                    option(value=unit.value) #{unit.label}
+                    option(value=units[i].value) #{units[i].label}
         |&nbsp;
         input(type='submit', value='Submit')
 

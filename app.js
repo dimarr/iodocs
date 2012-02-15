@@ -38,8 +38,8 @@ var express     = require('express'),
     eyes        = require('eyes'),
     HttpProxy   = require('http-proxy').HttpProxy
     rbytes      = require('rbytes'),
-    _           = require('./vendor/underscore'),
-    async       = require('./vendor/async')
+    _           = require('underscore'),
+    async       = require('async')
     ApiKeyStore = require('./app/ApiKeyStore').ApiKeyStore;
 
 // Configuration

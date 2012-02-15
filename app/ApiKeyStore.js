@@ -1,6 +1,6 @@
 var eyes   = require('eyes'),
     events = require('events');
-    async  = require('../vendor/async');
+    async  = require('async');
 
 var db;
 
